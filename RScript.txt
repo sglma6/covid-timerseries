@@ -1,0 +1,41 @@
+library(tseries)
+library(forecast)
+library(xts)
+
+#source data
+h <- read.csv("timeseries.csv",sep = ",",header = T)
+increase<-h[,2]
+hh <-ts(increase,frequency=365,start=c(2020,60))
+plot.ts(hh,ylab='Increase number of infected people',main='USA covid daily increased')
+abline(lm(hh~time(hh)),col="red") 
+#real data
+h2 <- read.csv("real.csv",sep = ",",header = T)
+increase2<-h2[0:14,2]
+hh2 <-ts(increase2,frequency=1,start = 282)
+#predict data
+h3 <- read.csv("predict.csv",sep = ",",header = T)
+increase3<-h3[,2]
+hh3 <-ts(increase3,frequency=1,start = 282)
+ts.plot(hh2,hh3,gpars=list(col=c("DarkTurquoise","RosyBrown")),ylab="New cases",main="Predict and Real Increases")
+
+#auto correlation and partial auto correlation
+acf(increase,lag.max=135, main="Auto Correlation Function")
+pacf(increase,lag.max=90, main="Partirial Auto Correlation Function")
+
+p_d_q=auto.arima(increase)
+#The p_d_q for arima is (2,1,2),and provide a self-evaluation of model
+model<-arima(increase,order=c(2,1,2),method="CSS-ML")
+accuracy(model)
+
+# Model evaluation#
+qqnorm(model$residuals)
+qqline(model$residuals)
+
+#increase1 is LSTM result
+increase1<-c(170532,178602,193359,209404,219470,211306,196107,186417,186705,194932,206953,214316,212332,204058)
+accuracy(increase2,increase3)
+accuracy(increase1,increase3)
+
+#forecast the number in next 14 days
+fore=forecast(model, h=14, level = c(99.5))
+plot(fore,xlab="TimeStamp(by day)",ylab="New cases")

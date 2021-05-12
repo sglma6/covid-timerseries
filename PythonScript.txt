@@ -1,0 +1,97 @@
+## import a group of packages
+import numpy
+import matplotlib.pyplot as plt
+from pandas import read_csv
+from keras.layers import Dense
+from keras.layers import LSTM
+from sklearn.preprocessing import MinMaxScaler
+from keras.models import Sequential
+
+
+
+
+# read data of 282 days 
+dataframe = read_csv('timeseries.csv',usecols=[1])
+data = dataframe.values
+dataset = data.astype('float32')
+# This is adapted from the paper ,lookback means observed time
+def create_dataset(dataset, look_back=1):
+    dataX, dataY = [], []
+    for i in range(len(dataset)-look_back):
+        a = dataset[i:(i+look_back), 0]
+        dataX.append(a)
+        dataY.append(dataset[i + look_back, 0])
+    return numpy.array(dataX), numpy.array(dataY)
+
+# set seed random
+numpy.random.seed(14)
+#set MinMaxScaler (0.1,0.9) because the range is too large
+scaler = MinMaxScaler(feature_range=(0.1, 0.9))
+dataset = scaler.fit_transform(dataset)
+
+
+
+
+# use this function to get the train data set
+look_back = 7
+X, Y = create_dataset(dataset, look_back)
+# We use look_back 7 because as we want to sample more data
+# While PACF is 11, but too large lookback makes the curve smoooth 
+# reshape input to be [samples, time steps, features]
+trainX = numpy.reshape(X, (X.shape[0], 1,X.shape[1]))
+
+
+# create and fit the LSTM network
+model = Sequential()
+model.add(LSTM(4, input_shape=(1, look_back)))
+#The input is a vector, actually look_back means the input_size
+model.add(Dense(1))
+model.compile(loss='mean_squared_error', optimizer='adam')
+#mse as loss function and adambooster as optimizer
+model.fit(trainX, Y, epochs=100, batch_size=2, verbose=2)
+#because the dataset is small, so there is no need to set batch_size too big
+
+
+# make predictions by observing the lookback X
+trainPredict = model.predict(trainX)
+# this is a self-fit just to see the model's performance based on these days
+result = scaler.inverse_transform(trainPredict)
+
+
+# This algorithmn is designed by myself, I will explain it later in my report
+def PredictTrend(Observed,Next,Length):
+    days=0
+    series=[]
+# Recursively update 7-days period 
+    while days<Length:
+        newseries = list(Observed[0][1:7])
+        newseries.append(Next)
+        newseries = numpy.array([newseries])
+        # delete the first day and make future days as prediction
+        previous = numpy.reshape(newseries, (newseries.shape[0], 1,newseries.shape[1]))
+        Next = model.predict(previous)[0][0]
+        Observed=newseries
+        days=days+1
+        series.append(Next)
+    return Length,series
+
+next_14_days = PredictTrend(trainX[-1],0.72897786,14)[1]
+final_result = scaler.inverse_transform(numpy.array([next_14_days]))
+#begin with trainX[-1],and next day is the last day
+
+
+
+
+ARIMA_preditct= numpy.array([180125,190066.7,202400.1,213619,221500.9,225235.2,225192.2,222491.9,218529,214575.5,211527.2,209810.8,209425,210066.4])
+Real_situation= numpy.array([204292,219881,225221,280567,207428,184224,201124,202971,245042,238427,251223,193919,201613,201660])
+
+plt.plot(final_result[0])
+plt.plot(ARIMA_preditct)
+plt.plot(Real_situation)
+plt.legend(['LSTM','ARIMA','Real'],fontsize=12)  
+plt.xlabel('The next 14 days',fontsize=12)
+plt.ylabel('Increasing Infection',fontsize=12)
+plt.title('Comparison between LSTM and Arima',fontsize=16)
+plt.rcParams['figure.figsize'] = (7,5) 
+plt.savefig("Result.jpg")
+plt.show()
